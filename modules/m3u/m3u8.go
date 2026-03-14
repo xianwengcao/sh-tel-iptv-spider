@@ -2,8 +2,9 @@ package m3u
 
 import (
 	"fmt"
-	"go.uber.org/zap/buffer"
 	"iptv-spider-sh/model"
+
+	"go.uber.org/zap/buffer"
 )
 
 type Writer struct {
@@ -33,6 +34,40 @@ func (m *Writer) Write(uri string, info model.ChannelInfo, ext model.M3u8Mapping
 	m.buf.WriteString(fmt.Sprintf(`#EXTINF:-1 tvg-id="%s" tvg-name="%s" tvg-logo="%s"`, info.MixNo, info.CommName, ext.Logo))
 	m.buf.WriteString(fmt.Sprintf(` group-title="%s"`, groups))
 	m.buf.WriteString(fmt.Sprintf(",%s\n%s", info.Name, uri))
+}
+
+// 新增方法：带回看地址
+func (m *Writer) WriteWithCatchup(uri string, catchup string, info model.ChannelInfo, ext model.M3u8Mapping) {
+	var groups = ext.CustomGroups
+	if groups == "" {
+		groups = ext.AutoGroups
+	}
+
+	m.buf.WriteString("\n")
+	if catchup != "" {
+		// 带回看地址
+		m.buf.WriteString(fmt.Sprintf(
+			`#EXTINF:-1 tvg-id="%s" tvg-name="%s" catchup="default" catchup-source="%s" tvg-logo="%s" group-title="%s",%s`,
+			info.MixNo,
+			info.CommName,
+			catchup,
+			ext.Logo,
+			groups,
+			info.Name,
+		))
+	} else {
+		// 普通EXTINF
+		m.buf.WriteString(fmt.Sprintf(
+			`#EXTINF:-1 tvg-id="%s" tvg-name="%s" tvg-logo="%s" group-title="%s",%s`,
+			info.MixNo,
+			info.CommName,
+			ext.Logo,
+			groups,
+			info.Name,
+		))
+	}
+	m.buf.WriteString("\n")
+	m.buf.WriteString(uri)
 }
 
 func (m *Writer) Bytes() []byte {
