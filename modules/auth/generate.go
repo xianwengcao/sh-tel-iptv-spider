@@ -4,12 +4,14 @@ import (
 	"encoding/xml"
 	"errors"
 	"fmt"
-	"github.com/golang-module/carbon"
 	"iptv-spider-sh/global"
 	"iptv-spider-sh/model"
 	"iptv-spider-sh/modules/m3u"
 	"iptv-spider-sh/utils"
 	"net/url"
+	"strings"
+
+	"github.com/golang-module/carbon"
 )
 
 const timeFormat = carbon.ShortDateTimeLayout + " -0700"
@@ -41,8 +43,26 @@ func GenerateM3u8(udpxy, scheme, xteve, all string) []byte {
 			m3u8Mapping.CustomGroups == "购物") {
 			continue
 		}
-		uri := assemblyUrl(udpxy, scheme, xteve, channel.ChannelURL)
-		m3uWriter.Write(uri, info, m3u8Mapping)
+		//uri := assemblyUrl(udpxy, scheme, xteve, channel.ChannelURL)//修改
+		uri := assemblyUrl(
+			udpxy,
+			scheme,
+			xteve,
+			channel.ChannelURL,
+			channel.ChannelFCCIP,
+			channel.ChannelFCCPort,
+		)
+
+		catchupSource := ""
+		if channel.TimeShiftURL != "" {
+			// 去掉数据库里的 rtsp:// 前缀
+			trimmed := strings.TrimPrefix(channel.TimeShiftURL, "rtsp://")
+			// 拼接固定前缀
+			catchupSource = "http://192.168.0.9:5140/rtsp/" + trimmed + "&playseek={utc:YmdHMS}-{utcend:YmdHMS}"
+		}
+
+		// 使用新的方法写入EXTINF
+		m3uWriter.WriteWithCatchup(uri, catchupSource, info, m3u8Mapping)
 	}
 	return m3uWriter.Bytes()
 }
@@ -71,22 +91,42 @@ func GenerateTimeShiftM3u8() []byte {
 		if m3u8Mapping.AutoGroups == "购物" || m3u8Mapping.CustomGroups == "购物" {
 			continue
 		}
-		uri := assemblyUrl("", "", "", channel.TimeShiftURL)
+		uri := assemblyUrl("", "", "", channel.TimeShiftURL, "", "") //修改加上fcc端口和用户
 		m3uWriter.Write(uri, info, m3u8Mapping)
 	}
 	return m3uWriter.Bytes()
 }
 
-func assemblyUrl(udpxy, scheme, xteve, uri string) string {
+// func assemblyUrl(udpxy, scheme, xteve, uri string) string //修改
+func assemblyUrl(udpxy, scheme, xteve, uri, fccIp, fccPort string) string {
+
 	u, _ := url.Parse(uri)
+
+	// xteve模式
 	if xteve == "true" {
 		return fmt.Sprintf("udp://@%s", u.Host)
-	} else if udpxy != "" {
-		return fmt.Sprintf("http://%s/udp/%s", udpxy, u.Host)
-	} else if scheme != "" {
-		return fmt.Sprintf("%s://%s", scheme, u.Host)
 	}
-	return uri
+
+	// udpxy模式
+	if udpxy != "" {
+		return fmt.Sprintf("http://%s/udp/%s", udpxy, u.Host)
+	}
+
+	// HTTP RTP + FCC
+	if fccIp != "" && fccPort != "" {
+		return fmt.Sprintf(
+			"http://192.168.0.9:5140/rtp/%s?fcc=%s:%s",
+			u.Host,
+			fccIp,
+			fccPort,
+		)
+	}
+
+	// HTTP RTP 无FCC
+	return fmt.Sprintf(
+		"http://192.168.0.9:5140/rtp/%s",
+		u.Host,
+	)
 }
 
 func GenerateXmlTv(daysAgo int) ([]byte, error) {
@@ -151,7 +191,6 @@ func GenerateXmlTv(daysAgo int) ([]byte, error) {
 	epgBytes = append([]byte(model.PrefixHeader+"\n"), epgBytes...)
 	return epgBytes, nil
 }
-
 
 func GenerateAndUploadM3u() {
 	m3uBytes := GenerateM3u8("", "", "true", "")
