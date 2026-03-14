@@ -3,14 +3,15 @@ package auth
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/golang-module/carbon"
-	"go.uber.org/zap"
-	"gorm.io/gorm/clause"
 	"iptv-spider-sh/global"
 	"iptv-spider-sh/model"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/golang-module/carbon"
+	"go.uber.org/zap"
+	"gorm.io/gorm/clause"
 )
 
 func (c *Client) checkSessionState() error {
@@ -64,9 +65,11 @@ func (c *Client) FetchChannelList() {
 		return
 	}
 	global.LOG.Info(fmt.Sprintf("FetchChannelList Data Length: %d", len(respJson.Data)))
-	for _, chanInfo := range respJson.Data {
+	for i := range respJson.Data {
+		// 解决第一次插入数据LastFetchTime值非法，导致sql语句报错
+		respJson.Data[i].LastFetchTime = time.Now()
 		global.LOG.Info("FetchChannelList Data:",
-			zap.Any("Channel Info", chanInfo))
+			zap.Any("Channel Info", respJson.Data[i]))
 	}
 	/*
 		TsTime        int       `gorm:"comment:TimeShiftTime 时移时间" json:"tsTime"`
@@ -86,7 +89,7 @@ func (c *Client) FetchChannelList() {
 		LastFetchTime time.Time `gorm:"comment:节目单最后更新时间" json:"-"`
 	*/
 	// 数据入库
-	global.DB.Clauses(clause.OnConflict{
+	result := global.DB.Clauses(clause.OnConflict{
 		Columns: []clause.Column{{Name: "mix_no"}},
 		DoUpdates: clause.AssignmentColumns([]string{
 			"code",
@@ -99,7 +102,15 @@ func (c *Client) FetchChannelList() {
 			"comm_name",
 		}),
 	}).Create(&respJson.Data)
-	global.LOG.Info("频道信息列表更新完成")
+
+	// 增加判断插入操作是否成功，日志方便排查
+	if result.Error != nil {
+		global.LOG.Error("数据库插入失败", zap.Error(result.Error))
+	} else {
+		global.LOG.Info("数据插入成功")
+		global.LOG.Info("频道信息列表更新完成")
+	}
+
 }
 
 func (c *Client) FetchChannelProg() {
@@ -115,8 +126,8 @@ func (c *Client) FetchChannelProg() {
 	uri := fmt.Sprintf("%s/%s", c.EPGHostUrl, p)
 
 	var channelInfoList []model.ChannelInfo
-	// 数据库取数据
-	global.DB.Group("comm_name").Find(&channelInfoList)
+	// 将 GROUP BY 查询修改为 DISTINCT("comm_name") 查询，确保只获取唯一的 comm_name 列表，避免了 MySQL 的限制问题。
+	global.DB.Distinct("comm_name").Find(&channelInfoList)
 	now := carbon.Now()
 	for _, ch := range channelInfoList {
 		// 4 个小时之内更新过，跳过此次更新
