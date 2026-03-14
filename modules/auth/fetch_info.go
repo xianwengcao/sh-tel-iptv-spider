@@ -60,14 +60,18 @@ func (c *Client) FetchChannelList() {
 		global.LOG.Error("FetchChannelList Unmarshal Err: " + err.Error())
 		return
 	}
-	if respJson.Data == nil || len(respJson.Data) == 0 {
+	if len(respJson.Data) == 0 {
 		global.LOG.Error("FetchChannelList Err: No Data!")
 		return
 	}
 	global.LOG.Info(fmt.Sprintf("FetchChannelList Data Length: %d", len(respJson.Data)))
 	for i := range respJson.Data {
-		// 解决第一次插入数据LastFetchTime值非法，导致sql语句报错
-		respJson.Data[i].LastFetchTime = time.Now()
+
+		// 避免接口返回 0000-00-00
+		if respJson.Data[i].LastFetchTime.IsZero() {
+			respJson.Data[i].LastFetchTime = time.Now().Add(-5 * time.Hour)
+		}
+
 		global.LOG.Info("FetchChannelList Data:",
 			zap.Any("Channel Info", respJson.Data[i]))
 	}
@@ -126,8 +130,11 @@ func (c *Client) FetchChannelProg() {
 	uri := fmt.Sprintf("%s/%s", c.EPGHostUrl, p)
 
 	var channelInfoList []model.ChannelInfo
-	// 将 GROUP BY 查询修改为 DISTINCT("comm_name") 查询，确保只获取唯一的 comm_name 列表，避免了 MySQL 的限制问题。
-	global.DB.Distinct("comm_name").Find(&channelInfoList)
+	// 解决
+	global.DB.
+		Select("ANY_VALUE(code) as code, ANY_VALUE(ch_id) as ch_id, comm_name, ANY_VALUE(last_fetch_time) as last_fetch_time, ANY_VALUE(is_pull_epg) as is_pull_epg, ANY_VALUE(is_show) as is_show").
+		Group("comm_name").
+		Find(&channelInfoList)
 	now := carbon.Now()
 	for _, ch := range channelInfoList {
 		// 4 个小时之内更新过，跳过此次更新
@@ -156,7 +163,7 @@ func (c *Client) FetchChannelProg() {
 				zap.Any("resp", respJson))
 			return
 		}
-		if respJson.Data == nil || len(respJson.Data) == 0 {
+		if len(respJson.Data) == 0 {
 			global.LOG.Warn("FetchChannelProg Err: No Data!",
 				zap.Any("SessionID", c.JSESSIONID),
 				zap.Any("Params", params),
