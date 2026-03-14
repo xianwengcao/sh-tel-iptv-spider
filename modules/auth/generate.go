@@ -143,14 +143,15 @@ func GenerateXmlTv(daysAgo int) ([]byte, error) {
 		}
 	}
 	// 序列化
-	epgBytes, err := xml.Marshal(&xmlTv)
+	epgBytes, err := xml.MarshalIndent(&xmlTv, "", "  ")
 	if err != nil {
 		global.LOG.Error("节目表单生成出错: " + err.Error())
 		return nil, errors.New("节目表单生成出错")
 	}
-	epgBytes = append([]byte(model.PrefixHeader), epgBytes...)
+	epgBytes = append([]byte(model.PrefixHeader+"\n"), epgBytes...)
 	return epgBytes, nil
 }
+
 
 func GenerateAndUploadM3u() {
 	m3uBytes := GenerateM3u8("", "", "true", "")
