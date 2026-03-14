@@ -11,7 +11,10 @@
 回放地址也需要走专网才能访问。
 
 ## 安装使用
-自行探索
+Openwrt用户需要安装
+opkg update
+opkg install zoneinfo-asia
+ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime
 
 ## 其他说明
 1. 程序使用Go语言编写，编译后可在支持的系统上运行。
