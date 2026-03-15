@@ -10,18 +10,22 @@ echo "Building $PROJECT_NAME, version: $VERSION"
 # 创建 build 目录（防止不存在报错）
 mkdir -p build
 
-# 使用 gox 交叉编译，多平台输出到 build 目录
-# 增加 Windows 版本
+# 使用 gox 进行交叉编译，指定要编译的操作系统和架构
+# 针对 Linux 64 位, Windows 64 位（amd64）, Windows 32 位（386）, Windows ARM64（arm64）
 CGO_ENABLED=0 gox -ldflags "-s -w ${LDFLAGS}" \
   -output="build/${PROJECT_NAME}_{{.OS}}_{{.Arch}}" \
-  --osarch="darwin/amd64 darwin/arm64 linux/386 linux/amd64 linux/arm linux/arm64 windows/386 windows/amd64"
+  --osarch="linux/amd64 windows/amd64 windows/386 windows/arm64"
 
 # 进入 build 目录
 cd build
 
 # 生成多种校验和
+# 生成标准校验和
 rhash -r -a . -o checksums
+# 生成 BSD 校验和
 rhash -r -a --bsd . -o checksums-bsd
+# 生成包含哈希顺序的校验和列表
 rhash --list-hashes > checksums_hashes_order
 
+# 打印完成信息
 echo "Build and checksum generation completed!"
