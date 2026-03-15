@@ -1,10 +1,12 @@
 package initialize
 
 import (
-	"github.com/robfig/cron/v3"
 	"iptv-spider-sh/global"
 	"sync"
 	"time"
+	_ "time/tzdata"
+
+	"github.com/robfig/cron/v3"
 )
 
 var onceCron sync.Once
@@ -12,8 +14,17 @@ var onceCron sync.Once
 func InitCron() {
 	if global.CRON == nil {
 		onceCron.Do(func() {
-			nyc, _ := time.LoadLocation("Asia/Shanghai")
-			global.CRON = cron.New(cron.WithSeconds(), cron.WithLocation(nyc))
+
+			loc, err := time.LoadLocation("Asia/Shanghai")
+			if err != nil {
+				panic(err)
+			}
+
+			global.CRON = cron.New(
+				cron.WithSeconds(),
+				cron.WithLocation(loc),
+			)
+
 			global.CRON.Start()
 		})
 	}
