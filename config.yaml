@@ -13,13 +13,20 @@ stb:
   type: 'B860A' # 机顶盒型号
   auth_host: '222.68.208.73:7001' # 认证服务器地址
 
+#相关api
+#例子
+#http://192.168.0.131:8888/api/m3u8
+#http://192.168.0.131:8888/api/tsM3u8
+#http://192.168.0.131:8888/api/epg
+
 epg:
   generator: 'Deny'
   source: 'Shanghai Telecom Iptv Spider'
-  xml_url: ''
+  xml_url: 'http://192.168.0.131:8888/api/epg'
   fetch_cron: '0 0 8,16,23 * * *'
-  rtsp_url: 'http://192.168.0.9:5140/rtsp/'
-  rtp_url: 'http://192.168.0.9:5140/rtp/'
+  rtsp_url: 'http://192.168.0.131:5140/rtsp/'
+  rtp_url: 'http://192.168.0.131:5140/rtp/'
+  logo_url: 'http://192.168.0.131:5140/a'
 #oss:
 #  enable: false
 #  upload_cron: '0 20 0,8,16 * * *' # 每天 0，8，16 点 20 分执行
