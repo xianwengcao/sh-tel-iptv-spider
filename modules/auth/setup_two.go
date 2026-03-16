@@ -3,12 +3,14 @@ package auth
 import (
 	"encoding/hex"
 	"fmt"
-	"github.com/PuerkitoBio/goquery"
-	"github.com/robertkrimen/otto"
 	"iptv-spider-sh/global"
 	"iptv-spider-sh/utils"
 	"net/url"
 	"strings"
+
+	"github.com/PuerkitoBio/goquery"
+	"github.com/robertkrimen/otto"
+	"go.uber.org/zap"
 )
 
 func (c *Client) epgIndex(doc *goquery.Document) *goquery.Document {
@@ -51,34 +53,73 @@ func (c *Client) epgLoadBalance(doc *goquery.Document) *goquery.Document {
 }
 
 func (c *Client) epgPortalAuth(doc *goquery.Document) (*goquery.Document, error) {
-	uri, method, formMap := utils.GetFromParamByHtml(doc, "form")
+	// 重试次数，最大设为3次
+	maxRetries := 3
+	var lastErr error
 
-	r := utils.RSA{}
-	r.LoadPriKey(utils.GetRSAPriKey())
+	for retries := 0; retries < maxRetries; retries++ {
+		uri, method, formMap := utils.GetFromParamByHtml(doc, "form")
 
-	token := formMap["UserToken"]
-	plainData := utils.InsertStrInUserToken(token)
-	if plainData == "" {
-		global.LOG.Error("InsertStrInUserToken: plainData is empty, Token: " + token)
-		return nil, fmt.Errorf("token is empty")
+		r := utils.RSA{}
+		r.LoadPriKey(utils.GetRSAPriKey())
+
+		token := formMap["UserToken"]
+		plainData := utils.InsertStrInUserToken(token)
+		if plainData == "" {
+			global.LOG.Error("InsertStrInUserToken: plainData is empty, Token: " + token)
+			return nil, fmt.Errorf("token is empty")
+		}
+		stbInfo := hex.EncodeToString(r.PriEncrypt([]byte(plainData)))
+		formMap["stbtype"] = c.stbType
+		formMap["stbinfo"] = strings.ToUpper(stbInfo)
+
+		resp := c.httpClient.Request(uri, method, formMap)
+		respDoc := utils.CreateHtmlDocByBytes(uri, resp.GetRespBytes())
+
+		infoMap := c.parseEpgAuthInfo(respDoc)
+		c.JSESSIONID = infoMap["SessionID"]
+		c.EPGHostUrl = fmt.Sprintf("http://%s/iptvepg/%s", infoMap["IpPort"], infoMap["framecode"])
+
+		// 校验 EPGHostUrl
+		if !isValidEPGHostUrl(c.EPGHostUrl) {
+			global.LOG.Error("生成的EPGHostUrl格式无效: " + c.EPGHostUrl)
+			lastErr = fmt.Errorf("EPG地址格式无效: %s", c.EPGHostUrl)
+
+			// 如果不是最后一次尝试，打印重试信息并继续
+			if retries < maxRetries-1 {
+				global.LOG.Info("EPGHostUrl 格式无效，正在重试...", zap.Int("RetryAttempt", retries+1))
+				continue
+			}
+			return nil, lastErr
+		}
+
+		global.LOG.Info("EPG门户认证成功", zap.String("EPGHostUrl", c.EPGHostUrl))
+		return respDoc, nil
 	}
-	stbInfo := hex.EncodeToString(r.PriEncrypt([]byte(plainData)))
-	formMap["stbtype"] = c.stbType
-	formMap["stbinfo"] = strings.ToUpper(stbInfo)
 
-	resp := c.httpClient.Request(uri, method, formMap)
-	respDoc := utils.CreateHtmlDocByBytes(uri, resp.GetRespBytes())
+	return nil, lastErr // 如果最终没有成功，则返回最后的错误
+}
 
-	//jsSetConfig('SessionID','777ABD76B5E1C3554016FBA0EFDA2F66');
-	//jsSetConfig('framecode','frame1413');
-	//jsSetConfig('IpPort','218.83.165.40:8084');
-	//jsSetConfig('EPGDefaultChannelNo','0');
+// isValidEPGHostUrl 检查 EPGHostUrl 是否符合标准格式
+func isValidEPGHostUrl(urlStr string) bool {
+	// 尝试解析 URL 并检查是否符合预期格式
+	u, err := url.Parse(urlStr)
+	if err != nil {
+		global.LOG.Error("EPGHostUrl 解析失败: ", zap.Any("url", urlStr))
+		return false
+	}
 
-	infoMap := c.parseEpgAuthInfo(respDoc)
-	c.JSESSIONID = infoMap["SessionID"]
-	c.EPGHostUrl = fmt.Sprintf("http://%s/iptvepg/%s", infoMap["IpPort"], infoMap["framecode"])
+	// 检查 URL 的 Host 部分是否是有效的 IP 或域名
+	if u.Host == "" || !strings.Contains(u.Host, ":") {
+		return false
+	}
 
-	return respDoc, nil
+	// 检查是否符合期望的 URL 格式，例如: http://218.83.188.230:8084/iptvepg/frame1002
+	if !strings.HasPrefix(urlStr, "http://") {
+		return false
+	}
+
+	return true
 }
 
 func (c *Client) parseEpgAuthInfo(doc *goquery.Document) map[string]string {
@@ -101,6 +142,9 @@ func (c *Client) parseEpgAuthInfo(doc *goquery.Document) map[string]string {
 			c.jsVM.RunScript(s)
 		}
 	}
+	// 打印解析到的配置信息
+	global.LOG.Info(fmt.Sprintf("解析到的IPTV配置信息: %+v", cache))
+
 	return cache
 }
 
