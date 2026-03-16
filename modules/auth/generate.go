@@ -39,9 +39,15 @@ func GenerateM3u8(udpxy, scheme, xteve, all string) []byte {
 		global.DB.Where("comm_name = ?", info.CommName).
 			Find(&m3u8Mapping)
 
-		// 如果没有 logo，就使用本地 logo
 		if m3u8Mapping.Logo == "" {
-			m3u8Mapping.Logo = fmt.Sprintf("http://127.0.0.1:8888/api/logo/%s.png", info.CommName)
+			// 从配置文件加载基础 URL
+			logoBaseUrl := global.CONFIG.Epg.LogoUrl // 例如 http://dynamiclogo.com/api/logo/
+
+			// 使用频道名称拼接成图片文件名
+			logoImageName := fmt.Sprintf("%s.png", info.CommName) // 频道名称拼接为图片名，如 CCTV.png
+
+			// 拼接最终的 logo 地址
+			m3u8Mapping.Logo = fmt.Sprintf("%s%s", logoBaseUrl, logoImageName)
 		}
 
 		if all != "true" && (m3u8Mapping.AutoGroups == "购物" ||
