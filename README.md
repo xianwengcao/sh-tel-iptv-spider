@@ -68,9 +68,11 @@ ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime
 
 | 数据类型    | 说明        |
 | ------- | --------- |
-| Channel | 频道信息      |
-| EPG     | 节目单       |
-| Stream  | M3U8 播放地址 |
+| auth_infos | 权健存储      |
+| channel_infos     | 频道列表       |
+| channels  | 频道源 |
+| epg_details | 节目单      |
+| m3u8_mappings| 频道分组       |
 
 数据库表结构请查看源码中的 SQL。
 
