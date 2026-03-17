@@ -132,7 +132,7 @@ func (c *Client) FetchChannelProg() {
 	var channelInfoList []model.ChannelInfo
 	// 解决
 	global.DB.
-		Select("ANY_VALUE(code) as code, ANY_VALUE(ch_id) as ch_id, comm_name, ANY_VALUE(last_fetch_time) as last_fetch_time, ANY_VALUE(is_pull_epg) as is_pull_epg, ANY_VALUE(is_show) as is_show").
+		Select("MAX(code) as code, MAX(ch_id) as ch_id, comm_name, MAX(last_fetch_time) as last_fetch_time, MAX(is_pull_epg) as is_pull_epg, MAX(is_show) as is_show").
 		Group("comm_name").
 		Find(&channelInfoList)
 	now := carbon.Now()
