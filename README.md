@@ -4,6 +4,7 @@
 用于抓取 IPTV **EPG 节目单** 和 **M3U8 播放地址**。
 
 📌 禁止利用本项目提供商业化行为，例如闲鱼和公司等盈利服务和所谓的技术支持。一经发现删库跑路
+📌 使用本软件需要一定的技术水平能力，如果你是纯小白，提交问题请你写清楚，白痴问题，和伸手党行为一律无视
 ---
 
 # 📌 环境要求
@@ -27,6 +28,15 @@
 
 # 🚀 安装使用
 
+| 文件名    | 平台       |
+| ------- | --------- |
+| sh-tel-iptv-spider_linux_386|Linux-x86-32位 |
+| sh-tel-iptv-spider_linux_amd64|Linux-x86-64位 | 
+| sh-tel-iptv-spider_linux_arm |Linux-Arm-32位 |
+| sh-tel-iptv-spider_linux_arm64|Linux-Arm-64位 |
+| sh-tel-iptv-spider_windows_386.exe|windows-32位 |
+|sh-tel-iptv-spider_windows_amd64.exe|windows-64位 |
+
 ## OpenWrt 用户
 
 由于 OpenWrt 默认缺少时区数据，需要安装 `zoneinfo`：
@@ -42,6 +52,7 @@ ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime
 ```bash
 ./iptv-spider-sh
 ```
+
 
 ---
 
