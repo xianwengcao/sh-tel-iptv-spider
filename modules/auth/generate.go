@@ -4,6 +4,7 @@ import (
 	"encoding/xml"
 	"errors"
 	"fmt"
+	"iptv-spider-sh/config"
 	"iptv-spider-sh/global"
 	"iptv-spider-sh/model"
 	"iptv-spider-sh/modules/m3u"
@@ -18,7 +19,8 @@ const timeFormat = carbon.ShortDateTimeLayout + " -0700"
 
 func GenerateM3u8(udpxy, scheme, xteve, all string) []byte {
 	m3uWriter := m3u.NewWriter()
-	m3uWriter.WriteHeaderWithInfo(global.CONFIG.Epg.XmlUrl)
+	m3uWriter.WriteHeaderWithInfo(global.CONFIG.Epg.XmlUrl)            //加载配置文件参数，
+	fmt.Println("ChannelMappings:", global.CONFIG.Epg.ChannelMappings) //确认配置是否加载调试
 
 	// 查询数据库
 	var channelInfoList []model.ChannelInfo
@@ -31,55 +33,105 @@ func GenerateM3u8(udpxy, scheme, xteve, all string) []byte {
 	fmt.Println("去重后的频道数量:", len(newChanInfo))
 	//fmt.Println("去重后的频道信息:", newChanInfo)
 
+	// 构建映射表
+	mappingMap := make(map[string]config.ChannelMapping)
+	for _, m := range global.CONFIG.Epg.ChannelMappings {
+		mappingMap[m.Igmp] = m
+	}
+
+	// 构建最终列表：先加 channel_infos，再加未匹配的 ChannelMappings
+	type M3uItem struct {
+		Info    model.ChannelInfo
+		Channel model.Channel
+		Mapping *config.ChannelMapping
+	}
+
+	var finalList []M3uItem
+	processed := make(map[string]bool)
 	for _, info := range newChanInfo {
-		// 不展示
 		if !info.IsShow {
 			continue
 		}
 		channel := model.Channel{}
-		global.DB.Where("user_channel_id = ?", info.MixNo).
-			Find(&channel)
+		global.DB.Where("user_channel_id = ?", info.MixNo).Find(&channel)
 
+		key := fmt.Sprintf("%v", channel.ChannelURL)
+		processed[key] = true
+
+		var mapping *config.ChannelMapping
+		if m, ok := mappingMap[channel.ChannelURL]; ok {
+			mapping = &m
+		}
+
+		finalList = append(finalList, M3uItem{
+			Info:    info,
+			Channel: channel,
+			Mapping: mapping,
+		})
+	}
+
+	// 加入 ChannelMappings 中未匹配的 IGMP 频道
+	for _, m := range global.CONFIG.Epg.ChannelMappings {
+		if _, ok := processed[m.Igmp]; !ok {
+			channel := model.Channel{}
+			// 使用 IGMP 去 channels 表匹配 channel_url
+			global.DB.Where("channel_url = ?", m.Igmp).Find(&channel)
+
+			info := model.ChannelInfo{
+				MixNo:    m.Id,
+				CommName: m.Name,
+				Name:     m.Name,
+				IsShow:   true,
+			}
+			finalList = append(finalList, M3uItem{
+				Info:    info,
+				Channel: channel,
+				Mapping: &m,
+			})
+		}
+	}
+
+	// ✅ 统一循环写入 m3u
+	for _, item := range finalList {
+		info := item.Info
+		channel := item.Channel
 		m3u8Mapping := model.M3u8Mapping{}
-		global.DB.Where("comm_name = ?", info.CommName).
-			Find(&m3u8Mapping)
+		//针对手动配置用户数据库判断分组
+		global.DB.Where("comm_name = ?", info.CommName).Find(&m3u8Mapping)
+		if m3u8Mapping.AutoGroups == "" {
+			m3u8Mapping.AutoGroups = autoGroupByName(info.Name)
+		}
 
+		// 默认 logo
 		if m3u8Mapping.Logo == "" {
-			// 从配置文件加载基础 URL
-			logoBaseUrl := global.CONFIG.Epg.LogoUrl // 例如 http://dynamiclogo.com/api/logo/
-
-			// 使用频道名称拼接成图片文件名
-			logoImageName := fmt.Sprintf("%s.png", info.CommName) // 频道名称拼接为图片名，如 CCTV.png
-
-			// 拼接最终的 logo 地址
+			logoBaseUrl := global.CONFIG.Epg.LogoUrl
+			logoImageName := fmt.Sprintf("%s.png", info.CommName)
 			m3u8Mapping.Logo = fmt.Sprintf("%s%s", logoBaseUrl, logoImageName)
 		}
 
-		//if all != "true" && (m3u8Mapping.AutoGroups == "购物" ||
-		//	m3u8Mapping.CustomGroups == "购物") {
-		//	continue
-		//}
-		//uri := assemblyUrl(udpxy, scheme, xteve, channel.ChannelURL)//修改
-		uri := assemblyUrl(
-			udpxy,
-			scheme,
-			xteve,
-			channel.ChannelURL,
-			channel.ChannelFCCIP,
-			channel.ChannelFCCPort,
-		)
+		// 用户自定义映射覆盖
+		if item.Mapping != nil {
+			if item.Mapping.Name != "" {
+				info.CommName = item.Mapping.Name
+
+			}
+			if item.Mapping.Logo != "" {
+				m3u8Mapping.Logo = global.CONFIG.Epg.LogoUrl + item.Mapping.Logo
+			}
+
+		}
+
+		uri := assemblyUrl(udpxy, scheme, xteve, channel.ChannelURL, channel.ChannelFCCIP, channel.ChannelFCCPort)
 
 		catchupSource := ""
 		if channel.TimeShiftURL != "" {
-			// 去掉数据库里的 rtsp:// 前缀
 			trimmed := strings.TrimPrefix(channel.TimeShiftURL, "rtsp://")
-			// 拼接固定前缀
-			catchupSource = fmt.Sprintf("%s%s&playseek={utc:YmdHMS}-{utcend:YmdHMS}", global.CONFIG.Epg.RtspUrl, trimmed)
+			catchupSource = fmt.Sprintf("%s%s%s", global.CONFIG.Epg.RtspUrl, trimmed, global.CONFIG.Epg.Playseek)
 		}
 
-		// 使用新的方法写入EXTINF
 		m3uWriter.WriteWithCatchup(uri, catchupSource, info, m3u8Mapping)
 	}
+
 	return m3uWriter.Bytes()
 }
 
@@ -104,9 +156,6 @@ func GenerateTimeShiftM3u8() []byte {
 		global.DB.Where("comm_name = ?", info.CommName).
 			Find(&m3u8Mapping)
 
-		if m3u8Mapping.AutoGroups == "购物" || m3u8Mapping.CustomGroups == "购物" {
-			continue
-		}
 		uri := assemblyUrl("", "", "", channel.TimeShiftURL, "", "") //修改加上fcc端口和用户
 		m3uWriter.Write(uri, info, m3u8Mapping)
 	}
@@ -222,4 +271,20 @@ func GenerateAndUploadXmlTv() {
 func GenerateAndUploadXmlTvDays7() {
 	xmlTvBytes, _ := GenerateXmlTv(7)
 	utils.UploadToOSS("/sh/tel-epg-7.xml", xmlTvBytes)
+}
+func autoGroupByName(name string) string {
+	if strings.Contains(name, "CCTV") {
+		return "央视"
+	} else if strings.Contains(name, "卫视") {
+		return "卫视"
+	} else if strings.Contains(name, "购物") {
+		return "购物"
+	} else if strings.Contains(name, "年级") {
+		return "空中课堂"
+	} else if strings.Contains(name, "百事通") {
+		return "百事通"
+	} else if strings.Contains(name, "影") {
+		return "电影"
+	}
+	return "其他"
 }
