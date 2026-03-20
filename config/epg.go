@@ -10,12 +10,18 @@ type Epg struct {
 	FetchCron       string           `mapstructure:"fetch_cron" json:"fetch_cron" yaml:"fetch_cron"`
 	Playseek        string           `mapstructure:"playseek" json:"playseek" yaml:"playseek"`
 	ChannelMappings []ChannelMapping `mapstructure:"channel_mappings" yaml:"channel_mappings"`
+	NameSequence    []ChannelMapping `mapstructure:"name_sequence" yaml:"name_sequence"`
 }
 
 type ChannelMapping struct {
-	Id    string `mapstructure:"id" json:"id" yaml:"id"`
-	Igmp  string `mapstructure:"Igmp" json:"igmp" yaml:"igmp"`
-	Name  string `mapstructure:"name" json:"name" yaml:"name"`
-	Logo  string `mapstructure:"logo" json:"logo" yaml:"logo"`
-	Group string `mapstructure:"group" json:"group" yaml:"group"`
+	Id            string `mapstructure:"id" json:"id" yaml:"id"`
+	Igmp          string `mapstructure:"Igmp" json:"igmp" yaml:"igmp"`
+	Name          string `mapstructure:"name" json:"name" yaml:"name"`
+	Logo          string `mapstructure:"logo" json:"logo" yaml:"logo"`
+	Group         string `mapstructure:"group" json:"group" yaml:"group"`
+	Name_sequence string `mapstructure:"name_sequence" json:"name_sequence" yaml:"name_sequence"`
+}
+
+type NameSequence struct {
+	Name string `mapstructure:"name_sequence" json:"name" yaml:"name"`
 }
