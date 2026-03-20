@@ -3,10 +3,11 @@ package utils
 import (
 	"bytes"
 	"context"
-	"github.com/minio/minio-go/v7"
-	"go.uber.org/zap"
 	"iptv-spider-sh/global"
 	"strings"
+
+	"github.com/minio/minio-go/v7"
+	"go.uber.org/zap"
 )
 
 func UploadToOSS(key string, data []byte) {
@@ -19,8 +20,8 @@ func UploadToOSS(key string, data []byte) {
 	} else if global.MinioClient != nil {
 		bucket := global.CONFIG.OSS.Bucket
 		r := bytes.NewReader(data)
-		if strings.HasPrefix(key, "/") {
-			key = strings.TrimPrefix(key, "/")
+		if after, ok := strings.CutPrefix(key, "/"); ok {
+			key = after
 		}
 		var opts minio.PutObjectOptions
 		if strings.HasSuffix(key, ".xml") {
