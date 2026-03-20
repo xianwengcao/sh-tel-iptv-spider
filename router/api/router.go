@@ -11,8 +11,6 @@ import (
 
 func InitApiRouters(rg iris.Party) {
 	rg.Get("/schedule", schedule)
-	// 提供/logo目录下的静态文件
-	rg.HandleDir("/logo", "./logo")
 	rg.Get("/run", func(ctx iris.Context) {
 		taskName := ctx.FormValue("task")
 
