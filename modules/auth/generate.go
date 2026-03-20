@@ -10,6 +10,8 @@ import (
 	"iptv-spider-sh/modules/m3u"
 	"iptv-spider-sh/utils"
 	"net/url"
+	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/golang-module/carbon"
@@ -90,7 +92,45 @@ func GenerateM3u8(udpxy, scheme, xteve, all string) []byte {
 			})
 		}
 	}
+	// ✅ 构建 name_sequence 顺序表
+	orderMap := make(map[string]int)
+	for i, m := range global.CONFIG.Epg.ChannelMappings {
+		if m.Name_sequence != "" {
+			orderMap[m.Name_sequence] = i
+		}
+	}
 
+	// 对 finalList 排序
+	sort.SliceStable(finalList, func(i, j int) bool {
+		nameI := finalList[i].Info.Name
+		nameJ := finalList[j].Info.Name
+
+		indexI, okI := orderMap[nameI]
+		indexJ, okJ := orderMap[nameJ]
+
+		// 如果都在 name_sequence 中，按顺序表排序
+		if okI && okJ {
+			return indexI < indexJ
+		}
+
+		// 如果只有 i 在顺序表，i 优先
+		if okI {
+			return true
+		}
+
+		// 如果只有 j 在顺序表，j 优先
+		if okJ {
+			return false
+		}
+
+		// 都不在顺序表，保持原数据库顺序（按 MixNo）
+		numI, errI := strconv.Atoi(finalList[i].Info.MixNo)
+		numJ, errJ := strconv.Atoi(finalList[j].Info.MixNo)
+		if errI != nil || errJ != nil {
+			return i < j // 出错按原顺序
+		}
+		return numI < numJ
+	})
 	// ✅ 统一循环写入 m3u
 	for _, item := range finalList {
 		info := item.Info
