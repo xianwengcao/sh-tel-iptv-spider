@@ -19,15 +19,82 @@ import (
 
 const timeFormat = carbon.ShortDateTimeLayout + " -0700"
 
+// compareStrings 比较两个字符串，支持中文排序
+// 返回 true 表示 str1 应该排在 str2 前面
+func compareStrings(str1, str2 string) bool {
+	if str1 == str2 {
+		return false
+	}
+	
+	// 尝试数字比较（如果都是数字）
+	num1, err1 := strconv.Atoi(str1)
+	num2, err2 := strconv.Atoi(str2)
+	if err1 == nil && err2 == nil {
+		return num1 < num2
+	}
+	
+	// 使用 strings.Compare 进行字符串比较
+	// strings.Compare 返回：
+	// -1 如果 str1 < str2
+	// 0  如果 str1 == str2
+	// 1  如果 str1 > str2
+	return strings.Compare(str1, str2) < 0
+}
+
+// getChannelInfoList 获取频道信息列表，包含错误处理
+func getChannelInfoList(orderBy string) ([]model.ChannelInfo, error) {
+	var channelInfoList []model.ChannelInfo
+	
+	var err error
+	if orderBy != "" {
+		err = global.DB.Order(orderBy).Find(&channelInfoList).Error
+	} else {
+		err = global.DB.Find(&channelInfoList).Error
+	}
+	
+	if err != nil {
+		global.LOG.Error("查询频道信息失败: " + err.Error())
+		return nil, err
+	}
+	
+	return channelInfoList, nil
+}
+
+// getM3u8Mapping 获取频道映射信息，包含错误处理
+func getM3u8Mapping(commName string) (model.M3u8Mapping, error) {
+	var m3u8Mapping model.M3u8Mapping
+	
+	if commName == "" {
+		return m3u8Mapping, nil
+	}
+	
+	err := global.DB.Where("comm_name = ?", commName).Find(&m3u8Mapping).Error
+	if err != nil {
+		global.LOG.Error(fmt.Sprintf("查询频道映射失败 (CommName: %s): %s", commName, err.Error()))
+		return m3u8Mapping, err
+	}
+	
+	return m3u8Mapping, nil
+}
+
 func GenerateM3u8(udpxy, scheme, xteve, all string) []byte {
+	// 配置空值检查
+	if global.CONFIG == nil || global.CONFIG.Epg.XmlUrl == "" {
+		global.LOG.Error("配置文件未正确加载")
+		return nil
+	}
+	
 	m3uWriter := m3u.NewWriter()
 	m3uWriter.WriteHeaderWithInfo(global.CONFIG.Epg.XmlUrl)            //加载配置文件参数，
 	fmt.Println("ChannelMappings:", global.CONFIG.Epg.ChannelMappings) //确认配置是否加载调试
 
 	// 查询数据库
-	var channelInfoList []model.ChannelInfo
+	channelInfoList, err := getChannelInfoList("mix_no asc")
+	if err != nil {
+		global.LOG.Error("查询频道信息失败: " + err.Error())
+		return nil
+	}
 
-	global.DB.Order("mix_no asc").Find(&channelInfoList)
 	fmt.Println("查询到的频道数量:", len(channelInfoList))
 	// 去重
 	newChanInfo := model.RemoveDuplicateChannelInfo(channelInfoList)
@@ -37,8 +104,10 @@ func GenerateM3u8(udpxy, scheme, xteve, all string) []byte {
 
 	// 构建映射表
 	mappingMap := make(map[string]config.ChannelMapping)
-	for _, m := range global.CONFIG.Epg.ChannelMappings {
-		mappingMap[m.Igmp] = m
+	if global.CONFIG.Epg.ChannelMappings != nil {
+		for _, m := range global.CONFIG.Epg.ChannelMappings {
+			mappingMap[m.Igmp] = m
+		}
 	}
 
 	// 构建最终列表：先加 channel_infos，再加未匹配的 ChannelMappings
@@ -48,14 +117,42 @@ func GenerateM3u8(udpxy, scheme, xteve, all string) []byte {
 		Mapping *config.ChannelMapping
 	}
 
+	// 性能优化：批量查询频道详情
+	// 1. 收集所有需要查询的 MixNo
+	var mixNos []string
+	for _, info := range newChanInfo {
+		if info.IsShow {
+			mixNos = append(mixNos, info.MixNo)
+		}
+	}
+	
+	// 2. 批量查询所有 Channel
+	var channels []model.Channel
+	if len(mixNos) > 0 {
+		if err := global.DB.Where("user_channel_id IN (?)", mixNos).Find(&channels).Error; err != nil {
+			global.LOG.Error("批量查询频道详情失败: " + err.Error())
+			// 不返回，继续处理，部分频道可能无法获取
+		}
+	}
+	
+	// 3. 构建 Channel 映射表
+	channelMap := make(map[string]model.Channel)
+	for _, channel := range channels {
+		channelMap[channel.UserChannelID] = channel
+	}
+	
 	var finalList []M3uItem
 	processed := make(map[string]bool)
 	for _, info := range newChanInfo {
 		if !info.IsShow {
 			continue
 		}
-		channel := model.Channel{}
-		global.DB.Where("user_channel_id = ?", info.MixNo).Find(&channel)
+		
+		channel, ok := channelMap[info.MixNo]
+		if !ok {
+			global.LOG.Warn(fmt.Sprintf("未找到频道详情 (MixNo: %s)，跳过该频道", info.MixNo))
+			continue
+		}
 
 		key := fmt.Sprintf("%v", channel.ChannelURL)
 		processed[key] = true
@@ -73,30 +170,35 @@ func GenerateM3u8(udpxy, scheme, xteve, all string) []byte {
 	}
 
 	// 加入 ChannelMappings 中未匹配的 IGMP 频道
-	for _, m := range global.CONFIG.Epg.ChannelMappings {
-		if _, ok := processed[m.Igmp]; !ok {
-			channel := model.Channel{}
-			// 使用 IGMP 去 channels 表匹配 channel_url
-			global.DB.Where("channel_url = ?", m.Igmp).Find(&channel)
+	if global.CONFIG.Epg.ChannelMappings != nil {
+		for _, m := range global.CONFIG.Epg.ChannelMappings {
+			if _, ok := processed[m.Igmp]; !ok {
+				channel := model.Channel{}
+				// 使用 IGMP 去 channels 表匹配 channel_url
+				if err := global.DB.Where("channel_url = ?", m.Igmp).Find(&channel).Error; err != nil {
+					global.LOG.Error(fmt.Sprintf("查询IGMP频道失败 (IGMP: %s): %s", m.Igmp, err.Error()))
+					continue // 跳过这条记录，继续处理其他
+				}
 
-			info := model.ChannelInfo{
-				MixNo:    m.Id,
-				CommName: m.Name,
-				Name:     m.Name,
-				IsShow:   true,
+				info := model.ChannelInfo{
+					MixNo:    m.Id,
+					CommName: m.Name,
+					Name:     m.Name,
+					IsShow:   true,
+				}
+				finalList = append(finalList, M3uItem{
+					Info:    info,
+					Channel: channel,
+					Mapping: &m,
+				})
 			}
-			finalList = append(finalList, M3uItem{
-				Info:    info,
-				Channel: channel,
-				Mapping: &m,
-			})
 		}
 	}
-	// ✅ 构建 name_sequence 顺序表
+	// 构建 name_sequence 顺序表
 	orderMap := make(map[string]int)
-	for i, m := range global.CONFIG.Epg.ChannelMappings {
-		if m.Name_sequence != "" {
-			orderMap[m.Name_sequence] = i
+	if global.CONFIG.Epg.NameSequence != nil {
+		for i, n := range global.CONFIG.Epg.NameSequence {
+			orderMap[n.Name] = i
 		}
 	}
 
@@ -108,36 +210,35 @@ func GenerateM3u8(udpxy, scheme, xteve, all string) []byte {
 		indexI, okI := orderMap[nameI]
 		indexJ, okJ := orderMap[nameJ]
 
-		// 如果都在 name_sequence 中，按顺序表排序
+		// 情况1：两个频道都在排序表中
 		if okI && okJ {
+			// 按排序表顺序排序
 			return indexI < indexJ
 		}
 
-		// 如果只有 i 在顺序表，i 优先
+		// 情况2：两个频道都不在排序表中
+		if !okI && !okJ {
+			// 使用辅助函数进行排序比较
+			return compareStrings(finalList[i].Info.MixNo, finalList[j].Info.MixNo)
+		}
+
+		// 情况3：一个在排序表，一个不在
+		// 排序表中的频道优先（放在前面）
 		if okI {
 			return true
 		}
-
-		// 如果只有 j 在顺序表，j 优先
-		if okJ {
-			return false
-		}
-
-		// 都不在顺序表，保持原数据库顺序（按 MixNo）
-		numI, errI := strconv.Atoi(finalList[i].Info.MixNo)
-		numJ, errJ := strconv.Atoi(finalList[j].Info.MixNo)
-		if errI != nil || errJ != nil {
-			return i < j // 出错按原顺序
-		}
-		return numI < numJ
+		// okJ 为 true
+		return false
 	})
 	// ✅ 统一循环写入 m3u
 	for _, item := range finalList {
 		info := item.Info
 		channel := item.Channel
-		m3u8Mapping := model.M3u8Mapping{}
-		//针对手动配置用户数据库判断分组
-		global.DB.Where("comm_name = ?", info.CommName).Find(&m3u8Mapping)
+		// 获取频道映射信息
+		m3u8Mapping, err := getM3u8Mapping(info.CommName)
+		if err != nil {
+			// 错误已记录，继续处理，使用默认值
+		}
 		if m3u8Mapping.AutoGroups == "" {
 			m3u8Mapping.AutoGroups = autoGroupByName(info.Name)
 		}
@@ -176,11 +277,20 @@ func GenerateM3u8(udpxy, scheme, xteve, all string) []byte {
 }
 
 func GenerateTimeShiftM3u8() []byte {
+	// 配置空值检查
+	if global.CONFIG == nil || global.CONFIG.Epg.XmlUrl == "" {
+		global.LOG.Error("配置文件未正确加载")
+		return nil
+	}
+	
 	m3uWriter := m3u.NewWriter()
 	m3uWriter.WriteHeaderWithInfo(global.CONFIG.Epg.XmlUrl)
 	// 查询数据库
-	var channelInfoList []model.ChannelInfo
-	global.DB.Find(&channelInfoList)
+	channelInfoList, err := getChannelInfoList("")
+	if err != nil {
+		global.LOG.Error("查询时移频道信息失败: " + err.Error())
+		return nil
+	}
 	// 去重
 	newChanInfo := model.RemoveDuplicateChannelInfo(channelInfoList)
 	for _, info := range newChanInfo {
@@ -189,12 +299,16 @@ func GenerateTimeShiftM3u8() []byte {
 			continue
 		}
 		channel := model.Channel{}
-		global.DB.Where("user_channel_id = ?", info.MixNo).
-			Find(&channel)
+		if err := global.DB.Where("user_channel_id = ?", info.MixNo).Find(&channel).Error; err != nil {
+			global.LOG.Error(fmt.Sprintf("查询时移频道详情失败 (MixNo: %s): %s", info.MixNo, err.Error()))
+			continue
+		}
 
-		m3u8Mapping := model.M3u8Mapping{}
-		global.DB.Where("comm_name = ?", info.CommName).
-			Find(&m3u8Mapping)
+		m3u8Mapping, err := getM3u8Mapping(info.CommName)
+		if err != nil {
+			global.LOG.Error(fmt.Sprintf("查询时移频道映射失败 (CommName: %s): %s", info.CommName, err.Error()))
+			continue
+		}
 
 		uri := assemblyUrl("", "", "", channel.TimeShiftURL, "", "") //修改加上fcc端口和用户
 		m3uWriter.Write(uri, info, m3u8Mapping)
@@ -204,8 +318,21 @@ func GenerateTimeShiftM3u8() []byte {
 
 // func assemblyUrl(udpxy, scheme, xteve, uri string) string //修改
 func assemblyUrl(udpxy, scheme, xteve, uri, fccIp, fccPort string) string {
-	u, _ := url.Parse(uri)
-
+	// 配置空值检查
+	if global.CONFIG == nil || global.CONFIG.Epg.RtpUrl == "" {
+		global.LOG.Error("配置文件未正确加载，无法生成URL")
+		return ""
+	}
+	
+	// 添加URL解析错误处理
+	if uri == "" {
+		return ""
+	}
+	u, err := url.Parse(uri)
+	if err != nil {
+		global.LOG.Error(fmt.Sprintf("URL解析失败 (URI: %s): %s", uri, err.Error()))
+		return ""
+	}
 	// xteve模式
 	if xteve == "true" {
 		return fmt.Sprintf("udp://@%s", u.Host)
@@ -236,6 +363,12 @@ func assemblyUrl(udpxy, scheme, xteve, uri, fccIp, fccPort string) string {
 }
 
 func GenerateXmlTv(daysAgo int) ([]byte, error) {
+	// 配置空值检查
+	if global.CONFIG == nil || global.CONFIG.Epg.Generator == "" {
+		global.LOG.Error("配置文件未正确加载")
+		return nil, errors.New("配置文件未正确加载")
+	}
+	
 	if daysAgo < 1 {
 		daysAgo = 1
 	} else if daysAgo > 7 {
@@ -247,10 +380,41 @@ func GenerateXmlTv(daysAgo int) ([]byte, error) {
 		Source:    global.CONFIG.Epg.Source,
 	}
 	// 取数据
-	var channelInfoList []model.ChannelInfo
-	global.DB.Find(&channelInfoList)
+	channelInfoList, err := getChannelInfoList("")
+	if err != nil {
+		global.LOG.Error("查询EPG频道信息失败: " + err.Error())
+		return nil, errors.New("查询频道信息失败")
+	}
 	// 去重
 	newChanInfo := model.RemoveDuplicateChannelInfo(channelInfoList)
+	
+	// 性能优化：批量查询EPG数据
+	// 1. 收集所有需要拉取EPG的频道名称
+	var epgChannelNames []string
+	for _, info := range newChanInfo {
+		if info.IsShow && info.IsPullEPG && info.CommName != "" {
+			epgChannelNames = append(epgChannelNames, info.CommName)
+		}
+	}
+	
+	// 2. 批量查询所有EPG数据
+	var allEpgData []model.EPGDetails
+	if len(epgChannelNames) > 0 {
+		if err := global.DB.Where("comm_name IN (?)", epgChannelNames).
+			Where("end_time > ?", now.SubDays(daysAgo).TimestampMilli()).
+			Order("comm_name, start_time asc").
+			Find(&allEpgData).Error; err != nil {
+			global.LOG.Error("批量查询EPG数据失败: " + err.Error())
+			// 不返回，继续处理，部分EPG数据可能无法获取
+		}
+	}
+	
+	// 3. 构建EPG数据映射表
+	epgDataMap := make(map[string][]model.EPGDetails)
+	for _, epg := range allEpgData {
+		epgDataMap[epg.CommName] = append(epgDataMap[epg.CommName], epg)
+	}
+	
 	for _, info := range newChanInfo {
 		// 不展示
 		if !info.IsShow {
@@ -270,11 +434,8 @@ func GenerateXmlTv(daysAgo int) ([]byte, error) {
 			continue
 		}
 
-		var epgData []model.EPGDetails
-		global.DB.Where("comm_name = ?", info.CommName).
-			Where("end_time > ?", now.SubDays(daysAgo).TimestampMilli()).
-			Order("start_time asc").
-			Find(&epgData)
+		// 从映射表中获取EPG数据
+		epgData := epgDataMap[info.CommName]
 
 		for _, epg := range epgData {
 			startTime := carbon.CreateFromTimestampMilli(epg.StartTime).Layout(timeFormat)
