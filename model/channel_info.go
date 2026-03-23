@@ -113,15 +113,16 @@ func RemoveDuplicateChannelInfo(in []ChannelInfo) []ChannelInfo {
 	}
 	// sort by mix_no
 	sort.Slice(newArr, func(i, j int) bool {
-		numi, err := strconv.Atoi(newArr[i].MixNo)
-		if err != nil {
-			return false
+		// 尝试数字比较（如果都是数字）
+		numi, errI := strconv.Atoi(newArr[i].MixNo)
+		numj, errJ := strconv.Atoi(newArr[j].MixNo)
+		if errI == nil && errJ == nil {
+			return numi < numj
 		}
-		numj, err := strconv.Atoi(newArr[j].MixNo)
-		if err != nil {
-			return true
-		}
-		return numi < numj
+		
+		// 使用字符串比较
+		// 使用 strings.Compare 进行更准确的字符串比较
+		return strings.Compare(newArr[i].MixNo, newArr[j].MixNo) < 0
 	})
 	return newArr
 }
