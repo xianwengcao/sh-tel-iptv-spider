@@ -6,72 +6,267 @@ system:
   oss-type: 'minio' # 可选值：minio、cos
 
 stb:
-  uid: 'xxxxxxxxx@etv1'     # IPTV 用户名，打开你的iptv机顶盒，打开用户
-  mac: 'xx:xx:xx:xx:xx:xx' # 机顶盒Mac地址 
-  sn: '000xxxxxxxxxxxxxxx' # 机顶盒SN码 
-  ip: '22.77.xx.x' # 专网IP地址
+  uid: 'xxxxxxxxx@etv1'     # IPTV 用户名
+  mac: 'xx:xx:xx:xx:xx:xx' # 机顶盒Mac地址
+  sn: '000xxxxxxxxxxxxxxx' # 机顶盒SN码
+  ip: '30.xx.xx.xx' # 专网IP地址
   type: 'B860A' # 机顶盒型号
   auth_host: '222.68.208.73:7001' # 认证服务器地址
 
+
 #相关api
-#例子
-#http://192.168.0.131:8888/api/m3u8
-#http://192.168.0.131:8888/api/tsM3u8
-#http://192.168.0.131:8888/api/epg
+#例子，daysAgo<=7
+#http://192.168.50.254:8888/api/m3u8
+#http://192.168.50.254:8888/api/epg?daysAgo=3
 
 epg:
   generator: 'Deny'
   source: 'Shanghai Telecom Iptv Spider'
-  xml_url: 'http://192.168.0.131:8888/api/epg'
+  xml_url: 'http://192.168.50.200:7777/epg'
+  logo_url: 'http://192.168.50.200:7777/logo/'
   fetch_cron: '0 0 8,16,23 * * *'
-  rtsp_url: 'http://192.168.0.131:5140/rtsp/'
-  rtp_url: 'http://192.168.0.131:5140/rtp/'
-  logo_url: 'http://192.168.0.131:5140/logo/'
+  rtp_url: 'http://192.168.50.254:5140/rtp/'
+  rtsp_url: 'http://192.168.50.254:5140/rtsp/'
+  
   #时移参数
   playseek: "&playseek={utc:YmdHMS}-{utcend:YmdHMS}"
-  #自定义获取频道，针对节目单列表没有的频道
+  
+  #自定义获取频道，针对节目单列表没有的频道，通过igmp或频道ID匹配直播和回放地址
   channel_mappings:
-    - id: '721'                            #tvg-id
-      igmp: 'igmp://233.18.204.169:5140'  #组播地址                           
+    - id: '721'                             #tvg-id
+      igmp: 'igmp://233.18.204.169:5140'  #组播地址
       name: "BesTV4K电影"                 #定义名称 #tvg-name
-      logo: "BesTV4K电影.png"             #定义图片名称
-      group: "BesTV4K电影"                #显示名称
-    - id: '723'                           #tvg-id
-      igmp: 'igmp://233.18.204.171:5140'  #组播地址                           
-      name: "BesTV4K动画"                 #定义名称 #tvg-name
-      logo: "BesTV4K动画.png"             #定义图片名称
-      group: "BesTV4K动画" 
-    - id: '722'                           #tvg-id
-      igmp: 'igmp://233.18.204.170:5140'  #组播地址                           
-      name: "BesTV4K记录"                 #定义名称 #tvg-name
-      logo: "BesTV4K记录.png"             #定义图片名称
-      group: "BesTV4K记录" 
-    - id: '198'                           #tvg-id
-      igmp: 'igmp://233.18.204.116:5140'  #组播地址                           
-      name: "BesTV电影介绍"                #定义名称 #tvg-name
-      logo: "BesTV电影介绍.png"            #定义图片名称
-      group: "BesTV电影介绍" 
+      logo: "BesTV.png"             #定义图片名称
+      group: "BesTV"             #节目分组
+    - id: '723'
+      igmp: 'igmp://233.18.204.171:5140'
+      name: "BesTV4K动画"
+      logo: "BesTV.png"
+      group: "BesTV" 
+    - id: '722'
+      igmp: 'igmp://233.18.204.170:5140'
+      name: "BesTV4K记录"
+      logo: "BesTV.png"
+      group: "BesTV" 
+    - id: '198'
+      igmp: 'igmp://233.18.204.116:5140'
+      name: "BesTV电影介绍"
+      logo: "BesTV.png"
+      group: "BesTV" 
+    - id: '128'
+      igmp: 'igmp://233.18.204.71:5140'
+      name: "CCTV-5"
+      logo: "CCTV-5.png"
+      group: "央视" 
+      display_name: "CCTV-5"
+    - id: '123'
+      igmp: 'igmp://233.18.204.67:5140'
+      name: "CCTV-5+"
+      logo: "CCTV-5+.png"
+      group: "央视" 
+      display_name: "CCTV-5+"
+    - id: '139'
+      igmp: 'igmp://233.18.204.215:5140'
+      name: "CCTV-16"
+      logo: "CCTV-16.png"
+      group: "央视" 
+      display_name: "CCTV-16 4K"
+      id_lookup: true
+    - id: '124'
+      igmp: 'igmp://233.18.204.204:5140'
+      name: "CCTV-4K"
+      logo: "CCTV-4K.png"
+      group: "央视" 
+      display_name: "CCTV-4K 4K"
+      id_lookup: true
+    - id: '100'
+      igmp: 'igmp://233.18.204.205:5140'
+      name: "多彩文体"
+      logo: "多彩文体.png"
+      group: "4K频道" 
+      display_name: "多彩文体4K"
+      id_lookup: true
+    - id: '101'
+      igmp: 'igmp://233.18.204.224:5140'
+      name: "东方卫视"
+      logo: "东方卫视4K.png"
+      group: "4K频道" 
+      display_name: "东方卫视4K"
+    - id: '144'
+      igmp: 'igmp://233.18.204.209:5140'
+      name: "北京卫视"
+      logo: "北京卫视4K.png"
+      group: "4K频道" 
+      display_name: "北京卫视4K"
+    - id: '145'
+      igmp: 'igmp://233.18.204.218:5140'
+      name: "广东卫视"
+      logo: "广东卫视4K.png"
+      group: "4K频道" 
+      display_name: "广东卫视4K"
+    - id: '146'
+      igmp: 'igmp://233.18.204.219:5140'
+      name: "深圳卫视"
+      logo: "深圳卫视4K.png"
+      group: "4K频道" 
+      display_name: "深圳卫视4K"
+    - id: '143'
+      igmp: 'igmp://233.18.204.227:5140'
+      name: "湖南卫视"
+      logo: "湖南卫视4K.png"
+      group: "4K频道" 
+      display_name: "湖南卫视4K"
+    - id: '141'
+      igmp: 'igmp://233.18.204.229:5140'
+      name: "浙江卫视"
+      logo: "浙江卫视4K.png"
+      group: "4K频道" 
+      display_name: "浙江卫视4K"
+    - id: '142'
+      igmp: 'igmp://233.18.204.226:5140'
+      name: "江苏卫视"
+      logo: "江苏卫视4K.png"
+      group: "4K频道" 
+      display_name: "江苏卫视4K"
+    - id: '156'
+      igmp: 'igmp://233.18.204.225:5140'
+      name: "四川卫视"
+      logo: "四川卫视4K.png"
+      group: "4K频道" 
+      display_name: "四川卫视4K"
+    - id: '148'
+      igmp: 'igmp://233.18.204.228:5140'
+      name: "山东卫视"
+      logo: "山东卫视4K.png"
+      group: "4K频道" 
+      display_name: "山东卫视4K"
+
+#过滤表
+  exclude_channels:
+    - "体育频道"
+    - "好享购物"
+    - "央广购物"
+    - "东方购物-1"
+    - "东方购物-2"
+    - "卡酷卡通"
 
 #排序表
   name_sequence: 
-    - name: "BesTV4K电影"
-    - name: "BesTV4K动画"
-    - name: "BesTV4K记录"
-    - name: "BesTV电影介绍"
-    - name: "CCTV16"
-    - name: "CCTV4K"
-    - name: "欢笑剧场4K"
-    - name: "测试"
+    - name: "CCTV-5"
+    - name: "CCTV-5+"
+    - name: "CCTV-16 4K"
+    - name: "CCTV-4K 4K"
+    - name: "东方卫视4K"
+    - name: "北京卫视4K"
+    - name: "广东卫视4K"
+    - name: "深圳卫视4K"
+    - name: "湖南卫视4K"
+    - name: "浙江卫视4K"
+    - name: "江苏卫视4K"
+    - name: "四川卫视4K"
+    - name: "山东卫视4K"
+    - name: "多彩文体4K"
+    - name: "CCTV-1HD"
+    - name: "CCTV-2HD"
+    - name: "CCTV-3HD"
+    - name: "CCTV-4HD"
+    - name: "CCTV-5HD"
+    - name: "CCTV-6HD"
+    - name: "CCTV-7HD"
+    - name: "CCTV-8HD"
+    - name: "CCTV-9HD"
+    - name: "CCTV-10HD"
+    - name: "CCTV-11HD"
+    - name: "CCTV-12HD"
+    - name: "CCTV-13HD"
+    - name: "CCTV-14HD"
+    - name: "CCTV-15HD"
+    - name: "CCTV-16HD"
+    - name: "CCTV-17HD"
+    - name: "CCTV-5+HD"
+    - name: "CCTV-4K"
+    - name: "东方卫视HD"
+    - name: "浙江卫视HD"
+    - name: "江苏卫视HD"
+    - name: "湖南卫视HD"
+    - name: "北京卫视HD"
+    - name: "广东卫视HD"
+    - name: "深圳卫视HD"
+    - name: "黑龙江卫视HD"
+    - name: "山东卫视HD"
+    - name: "湖北卫视HD"
+    - name: "安徽卫视HD"
+    - name: "东南卫视HD"
+    - name: "江西卫视HD"
+    - name: "辽宁卫视HD"
+    - name: "天津卫视HD"
+    - name: "四川卫视HD"
+    - name: "重庆卫视HD"
+    - name: "贵州卫视HD"
+    - name: "海南卫视HD"
+    - name: "河北卫视HD"
+    - name: "三沙卫视HD"
+    - name: "河南卫视HD"
+    - name: "云南卫视HD"
+    - name: "广西卫视HD"
+    - name: "吉林卫视HD"
+    - name: "甘肃卫视HD"
+    - name: "青海卫视HD"
+    - name: "山西卫视HD"
+    - name: "内蒙古卫视HD"
+    - name: "新疆卫视HD"
+    - name: "兵团卫视HD"
+    - name: "西藏卫视HD"
+    - name: "陕西卫视HD"
+    - name: "宁夏卫视HD"
+    - name: "延边卫视"
+    - name: "CHC家庭影院HD"
+    - name: "CHC动作电影HD"
+    - name: "CHC影迷电影HD"
+    - name: "风云足球HD"
+    - name: "央视台球HD"
+    - name: "兵器科技HD"
+    - name: "世界地理HD"
+    - name: "快乐垂钓HD"
+    - name: "女性时尚HD"
+    - name: "高尔夫网球HD"
+    - name: "怀旧剧场HD"
+    - name: "风云剧场HD"
+    - name: "第一剧场HD"
+    - name: "风云音乐HD"
+    - name: "央视文化精品HD"
+    - name: "早期教育HD"
+    - name: "游戏风云HD"
+    - name: "中国教育-1HD"
+    - name: "中国教育-2"
+    - name: "中国教育-4HD"
+    - name: "CGTN"
+    - name: "生活时尚HD"
+    - name: "动漫秀场HD"
+    - name: "乐游HD"
+    - name: "都市剧场HD"
+    - name: "法治天地HD"
+    - name: "多彩文体HD"
+    - name: "都市频道HD"
+    - name: "哈哈炫动HD"
+    - name: "东方影视HD"
+    - name: "新闻综合HD"
+    - name: "五星体育HD"
+    - name: "第一财经HD"
+    - name: "上海教育HD"
+    - name: "东方财经HD"
+    - name: "金色学堂HD"
+    - name: "金鹰纪实HD"
+    - name: "卡酷少儿HD"
+    - name: "金鹰卡通HD"
+    - name: "财富天下HD"
+    - name: "嘉佳卡通"
+    - name: "家庭理财"
 
-#oss:
-#  enable: false
-#  upload_cron: '0 20 0,8,16 * * *' # 每天 0，8，16 点 20 分执行
-#  endpoint: 'https://xxxxxxxxxx.cos.ap-shanghai.myqcloud.com'
-#  access-key: 'xxxxxxxxx'
-#  secret-key: 'xxxxxxxxx'
+
 
 oss:
-  enable: true
+  enable: false
   upload_cron: '0 20 0,8,16 * * *'
   endpoint: 'xxx.com'
   use-ssl: false
