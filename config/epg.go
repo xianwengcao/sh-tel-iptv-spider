@@ -9,8 +9,9 @@ type Epg struct {
 	LogoUrl         string           `mapstructure:"logo_url" json:"logo_url" yaml:"logo_url"`
 	FetchCron       string           `mapstructure:"fetch_cron" json:"fetch_cron" yaml:"fetch_cron"`
 	Playseek        string           `mapstructure:"playseek" json:"playseek" yaml:"playseek"`
-	ChannelMappings []ChannelMapping `mapstructure:"channel_mappings" yaml:"channel_mappings"`
-	NameSequence    []ChannelMapping `mapstructure:"name_sequence" yaml:"name_sequence"`
+	ChannelMappings  []ChannelMapping `mapstructure:"channel_mappings" yaml:"channel_mappings"`
+	NameSequence     []ChannelMapping `mapstructure:"name_sequence" yaml:"name_sequence"`
+	ExcludeChannels  []string         `mapstructure:"exclude_channels" yaml:"exclude_channels"` // 过滤掉的频道 CommName 列表
 }
 
 type ChannelMapping struct {
@@ -19,6 +20,8 @@ type ChannelMapping struct {
 	Name          string `mapstructure:"name" json:"name" yaml:"name"`
 	Logo          string `mapstructure:"logo" json:"logo" yaml:"logo"`
 	Group         string `mapstructure:"group" json:"group" yaml:"group"`
+	IdLookup      bool   `mapstructure:"id_lookup" json:"id_lookup" yaml:"id_lookup"`             // true 时通过 id（user_channel_id）查找 TimeShiftURL
+	DisplayName   string `mapstructure:"display_name" json:"display_name" yaml:"display_name"`     // 覆盖逗号后播放器显示的频道名称
 	Name_sequence string `mapstructure:"name_sequence" json:"name_sequence" yaml:"name_sequence"`
 }
 
