@@ -172,26 +172,39 @@ func GenerateM3u8(udpxy, scheme, xteve, all string) []byte {
 	// 加入 ChannelMappings 中未匹配的 IGMP 频道
 	if global.CONFIG.Epg.ChannelMappings != nil {
 		for _, m := range global.CONFIG.Epg.ChannelMappings {
-			if _, ok := processed[m.Igmp]; !ok {
-				channel := model.Channel{}
-				// 使用 IGMP 去 channels 表匹配 channel_url
-				if err := global.DB.Where("channel_url = ?", m.Igmp).Find(&channel).Error; err != nil {
-					global.LOG.Error(fmt.Sprintf("查询IGMP频道失败 (IGMP: %s): %s", m.Igmp, err.Error()))
-					continue // 跳过这条记录，继续处理其他
-				}
-
-				info := model.ChannelInfo{
-					MixNo:    m.Id,
-					CommName: m.Name,
-					Name:     m.Name,
-					IsShow:   true,
-				}
-				finalList = append(finalList, M3uItem{
-					Info:    info,
-					Channel: channel,
-					Mapping: &m,
-				})
+			channel := model.Channel{}
+			var err error
+			if m.IdLookup {
+				// 通过 id（user_channel_id）查找，仅借用 TimeShiftURL
+				err = global.DB.Where("user_channel_id = ?", m.Id).Find(&channel).Error
+			} else {
+				// 原有逻辑：通过 igmp（channel_url）查找
+				err = global.DB.Where("channel_url = ?", m.Igmp).Find(&channel).Error
 			}
+			if err != nil {
+				global.LOG.Error(fmt.Sprintf("查询IGMP频道失败 (IGMP: %s): %s", m.Igmp, err.Error()))
+				continue
+			}
+
+			// 强制保留配置中的 igmp 作为播放地址，不被数据库的 ChannelURL 覆盖
+			channel.ChannelURL = m.Igmp
+
+			// Name 用于排序和 M3U 逗号后显示名，优先使用 display_name
+			displayName := m.Name
+			if m.DisplayName != "" {
+				displayName = m.DisplayName
+			}
+			info := model.ChannelInfo{
+				MixNo:    m.Id,
+				CommName: m.Name,
+				Name:     displayName,
+				IsShow:   true,
+			}
+			finalList = append(finalList, M3uItem{
+				Info:    info,
+				Channel: channel,
+				Mapping: &m,
+			})
 		}
 	}
 	// 构建 name_sequence 顺序表
@@ -230,8 +243,18 @@ func GenerateM3u8(udpxy, scheme, xteve, all string) []byte {
 		// okJ 为 true
 		return false
 	})
+	// 构建排除集合
+	excludeSet := make(map[string]struct{})
+	for _, name := range global.CONFIG.Epg.ExcludeChannels {
+		excludeSet[name] = struct{}{}
+	}
+
 	// ✅ 统一循环写入 m3u
 	for _, item := range finalList {
+		// 过滤 exclude_channels 中的频道
+		if _, excluded := excludeSet[item.Info.CommName]; excluded {
+			continue
+		}
 		info := item.Info
 		channel := item.Channel
 		// 获取频道映射信息
@@ -254,12 +277,13 @@ func GenerateM3u8(udpxy, scheme, xteve, all string) []byte {
 		if item.Mapping != nil {
 			if item.Mapping.Name != "" {
 				info.CommName = item.Mapping.Name
-
 			}
 			if item.Mapping.Logo != "" {
 				m3u8Mapping.Logo = global.CONFIG.Epg.LogoUrl + item.Mapping.Logo
 			}
-
+			if item.Mapping.Group != "" {
+				m3u8Mapping.CustomGroups = item.Mapping.Group
+			}
 		}
 
 		uri := assemblyUrl(udpxy, scheme, xteve, channel.ChannelURL, channel.ChannelFCCIP, channel.ChannelFCCPort)
