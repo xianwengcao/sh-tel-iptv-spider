@@ -22,7 +22,7 @@ stb:
 epg:
   generator: 'Deny'
   source: 'Shanghai Telecom Iptv Spider'
-  xml_url: 'http://192.168.50.200:7777/epg'
+  xml_url: 'http://192.168.50.200:7777/epg.xml'
   logo_url: 'http://192.168.50.200:7777/logo/'
   fetch_cron: '0 0 8,16,23 * * *'
   rtp_url: 'http://192.168.50.254:5140/rtp/'
