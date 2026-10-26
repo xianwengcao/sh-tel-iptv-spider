@@ -22,6 +22,10 @@ var (
 	ErrIPAddr  = errors.New("错误的IP地址")
 )
 
+// Default4kLogAuthAddr 4K 认证服务器默认地址。
+// 可通过 auth.With4kLogAuthAddr 覆盖（例如接上 config 里的 stb.auth_host）。
+const Default4kLogAuthAddr = "222.68.208.73:7001"
+
 var globalClient *Client
 
 type baseConfig struct {
@@ -148,7 +152,7 @@ func NewClient(uid, sn, mac, ip string, options ...ClientOption) (*Client, error
 			macAddr:          mac,
 			ip:               ip,
 			userAgent:        "webkit;Resolution(PAL,720P,1080P,2106P,4K)",
-			pre4kLogAuthAddr: "222.68.208.73:7001",
+			pre4kLogAuthAddr: Default4kLogAuthAddr,
 			stbType:          "B860A",
 		},
 	}
