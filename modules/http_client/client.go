@@ -30,6 +30,14 @@ func (c *HttpClient) Request(uri, method string, form map[string]string) *HttpCl
 	if err != nil {
 		global.LOG.Error(fmt.Sprintf("%s %s", method, uri))
 		global.LOG.Error(err.Error())
+		// 出站网卡绑定已启用时，补一条排查提示：
+		// 认证接口的 i/o timeout / 网络不可达，绝大多数是 system.dev
+		// 指到了到不了专网的网卡（或该网卡没有可用 IPv4 / 路由）。
+		if b := global.BIND.Default; b.Enabled() {
+			global.LOG.Error("出站网卡绑定已启用 -> " + b.Describe())
+			global.LOG.Error("若上述错误是 i/o timeout / no route to host，请先执行 `iptv-spider-sh -netcheck` " +
+				"找出能连通专网的网卡；或临时把 config.yaml 里的 system.dev 置空后重启对比")
+		}
 	}
 	global.LOG.Debug(fmt.Sprintf("Resp Body: %s", string(c.resp.Body())))
 	return c
@@ -52,6 +60,10 @@ func NewHttpClient(opts ...HttpClientOption) *HttpClient {
 	}
 	if c.client == nil {
 		c.client = resty.New()
+		// 出站网卡绑定：让 IPTV 认证、EPG、频道列表等请求
+		// 从 config 中 system.dev 指定的网络接口发出。
+		// 未配置 dev 时 Transport() 返回 nil，行为与改动前完全一致。
+		c.client.SetTransport(global.BIND.Default.Transport())
 	}
 	c.afterAction()
 	return c
