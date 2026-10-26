@@ -119,7 +119,7 @@ func RemoveDuplicateChannelInfo(in []ChannelInfo) []ChannelInfo {
 		if errI == nil && errJ == nil {
 			return numi < numj
 		}
-		
+
 		// 使用字符串比较
 		// 使用 strings.Compare 进行更准确的字符串比较
 		return strings.Compare(newArr[i].MixNo, newArr[j].MixNo) < 0
