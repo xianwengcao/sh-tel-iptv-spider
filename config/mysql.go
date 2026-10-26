@@ -10,6 +10,10 @@ type Mysql struct {
 	MaxOpenConns int    `mapstructure:"max-open-conns" json:"maxOpenConns" yaml:"max-open-conns"` // 打开到数据库的最大连接数
 	LogMode      string `mapstructure:"log-mode" json:"logMode" yaml:"log-mode"`                  // 是否开启Gorm全局日志
 	LogZap       bool   `mapstructure:"log-zap" json:"logZap" yaml:"log-zap"`                     // 是否通过zap写入日志文件
+
+	// Dev 单独指定 MySQL 连接所使用的网卡；留空表示跟随 system.dev，
+	// 填 off / none / - 表示该连接不做网卡绑定（走系统默认路由）。
+	Dev string `mapstructure:"dev" json:"dev" yaml:"dev"`
 }
 
 func (m *Mysql) Dsn() string {
