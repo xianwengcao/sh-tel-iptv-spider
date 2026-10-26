@@ -22,6 +22,8 @@ func COS() *cos.Client {
 		Transport: &cos.AuthorizationTransport{
 			SecretID:  cosConfig.AccessKey,
 			SecretKey: cosConfig.SecretKey,
+			// 出站网卡绑定：让上传也从指定网卡出去；未启用时为 nil，沿用默认行为
+			Transport: global.BIND.OSS.Transport(),
 		},
 	})
 	return c
@@ -40,6 +42,8 @@ func Minio() *minio.Client {
 		Creds:        credentials.NewStaticV4(minioConfig.AccessKey, minioConfig.SecretKey, ""),
 		Secure:       minioConfig.UseSSL,
 		BucketLookup: minio.BucketLookupDNS,
+		// 出站网卡绑定：让上传也从指定网卡出去；未启用时为 nil，沿用 minio 默认传输
+		Transport: global.BIND.OSS.Transport(),
 	})
 	if err != nil {
 		return nil
