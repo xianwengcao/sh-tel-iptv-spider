@@ -9,17 +9,28 @@ import (
 	"strings"
 )
 
+// CreateHtmlDocByBytes 把 HTTP 响应字节解析成 goquery 文档。
+//
+// 约定：永远返回非 nil 文档（解析失败时回退为空文档），
+// 避免调用方在 doc.Url / doc.Find 上出现 panic。
 func CreateHtmlDocByBytes(uri string, resp []byte) *goquery.Document {
 	doc, err := goquery.NewDocumentFromReader(bytes.NewReader(resp))
-	doc.Url, _ = url.Parse(uri)
-	if err != nil {
-		global.LOG.Error(err.Error())
-		return nil
+	if err != nil || doc == nil {
+		global.LOG.Error(fmt.Sprintf("解析响应内容失败(uri=%s, %d 字节): %v", uri, len(resp), err))
+		// 兜底：解析空内容得到一个空文档
+		doc, err = goquery.NewDocumentFromReader(strings.NewReader("<html><body></body></html>"))
+		if err != nil || doc == nil {
+			return doc
+		}
 	}
+	doc.Url, _ = url.Parse(uri)
 	return doc
 }
 
 func GetFromParamByHtml(d *goquery.Document, sec ...string) (uri, method string, formMap map[string]string) {
+	if d == nil {
+		return
+	}
 	s := "form"
 	if len(sec) == 1 {
 		s = sec[0]
