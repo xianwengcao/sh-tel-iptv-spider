@@ -25,6 +25,11 @@ func (v *VM) RunScript(s string) otto.Value {
 
 func (v *VM) RunScriptForHtml(doc *goquery.Document) *VM {
 	v.createVM()
+	if doc == nil {
+		// 上游响应为空时 CreateHtmlDocByBytes 可能拿不到文档；这里直接返回，
+		// 让调用方去做错误处理，而不是在 doc.Find 上 panic。
+		return v
+	}
 	scripts := doc.Find("script")
 	scripts.Each(func(_ int, s *goquery.Selection) {
 		c := s.Nodes[0].FirstChild
