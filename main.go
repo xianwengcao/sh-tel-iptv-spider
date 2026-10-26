@@ -1,6 +1,14 @@
 package main
 
 import (
+	"context"
+	"flag"
+	"fmt"
+	"net"
+	"os"
+	"strings"
+	"time"
+
 	"github.com/golang-module/carbon"
 	"github.com/kataras/iris/v12"
 	"github.com/kataras/iris/v12/middleware/recover"
@@ -8,12 +16,23 @@ import (
 	"iptv-spider-sh/global"
 	"iptv-spider-sh/initialize"
 	"iptv-spider-sh/modules/auth"
+	"iptv-spider-sh/modules/netbind"
 	"iptv-spider-sh/router"
 )
 
+// netCheck 只做出站网卡连通性自检就退出，用于排查「认证接口 i/o timeout」这类问题。
+// 必须在 initialize.Viper() 之前注册：Viper 内部会调用 flag.Parse()。
+var netCheck = flag.Bool("netcheck", false, "只做出站网卡连通性自检并退出")
+
 func main() {
 	initialize.Viper()
+	if *netCheck {
+		runNetCheck()
+		return
+	}
 	global.LOG = initialize.Zap()
+	// 出站网卡绑定：必须在 Cache() / Gorm() / OSS() 之前初始化
+	global.BIND = initialize.NetBind()
 	global.CACHE = initialize.Cache()
 	global.DB = initialize.Gorm()
 	ossType := global.CONFIG.System.OSSType
@@ -119,4 +138,44 @@ func configHost(su *iris.Supervisor) {
 	su.RegisterOnShutdown(func() {
 		println("Server Closed")
 	})
+}
+
+// runNetCheck 打印「哪张网卡能到达 IPTV 认证服务器」的自检报告。
+//
+// 用法：./iptv-spider-sh -netcheck
+// 它会依次用 system.dev 指定的出口、系统默认路由、以及其余每张网卡去连认证服务器，
+// 直接给出「该把 system.dev 设成哪张网卡」的结论，不需要真的跑一遍认证流程。
+func runNetCheck() {
+	stb := global.CONFIG.Stb
+	builtin := auth.Default4kLogAuthAddr
+	configured := normalizeHostPort(stb.AuthHost, "7001")
+
+	var targets []string
+	switch {
+	case configured == "":
+		fmt.Printf("配置里没有 stb.auth_host，使用内置默认值 %s\n\n", builtin)
+		targets = append(targets, builtin)
+	case configured != builtin:
+		// 程序内部认证目前固定用内置地址，这里一并探测，避免误判
+		targets = append(targets, configured, builtin)
+	default:
+		targets = append(targets, configured)
+	}
+
+	netbind.Diagnose(context.Background(), global.CONFIG.System.Dev, targets, 3*time.Second, os.Stdout)
+}
+
+// normalizeHostPort 把配置里的 host / host:port / http://host 统一成 host:port。
+func normalizeHostPort(v, defPort string) string {
+	v = strings.TrimSpace(v)
+	v = strings.TrimPrefix(v, "http://")
+	v = strings.TrimPrefix(v, "https://")
+	v = strings.TrimSuffix(v, "/")
+	if v == "" {
+		return ""
+	}
+	if _, _, err := net.SplitHostPort(v); err == nil {
+		return v
+	}
+	return net.JoinHostPort(v, defPort)
 }

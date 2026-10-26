@@ -5,6 +5,21 @@ system:
   db-type: 'mysql'
   oss-type: 'minio' # 可选值：minio、cos
 
+  # ===== 出站网卡绑定 =====
+  # 让程序的所有对外通信（IPTV 认证 / EPG / 频道列表、MySQL、Redis、对象存储）
+  # 都从下面指定的网络接口发出。适合主机有多张网卡（例如上网口 + IPTV 专网口）的场景。
+  #   dev 取值：
+  #     - 网卡名，Linux/OpenWrt 推荐，如 eth0 / pppoe-wan / br-lan / eth0.85
+  #       （Linux 下会额外设置 SO_BINDTODEVICE 强制走该网卡，需要 root 权限）
+  #     - 该网卡上的本机 IPv4 地址，如 192.168.10.2（Windows 推荐这种写法）
+  #     - 留空 = 不绑定，走系统路由表（默认行为，与旧版本一致）
+  #   dev-dns：
+  #     是否把 DNS 解析也绑定到该网卡。IPTV 专网网卡通常没有 DNS，
+  #     保持 false 更安全；确认该网卡可用 DNS 时再打开。
+  # 提示：修改 dev 后需要重启程序才生效，且不会影响 addr 的监听行为。
+  dev: 'br-iptv'
+  dev-dns: false
+
 stb:
   uid: 'xxxxxxxxx@etv1'     # IPTV 用户名
   mac: 'xx:xx:xx:xx:xx:xx' # 机顶盒Mac地址
@@ -273,12 +288,18 @@ oss:
   bucket: 'epg'
   access-key: 'xxxxxxxxx'
   secret-key: 'xxxxxxxxx'
+  # 对象存储走哪张网卡：留空跟随 system.dev；
+  # 填 off / none / - 表示不绑定（存储服务在局域网时建议填 off）
+  dev: 'off'
 
 # redis configuration
 redis:
   db: 0
   addr: '10.0.0.10:6379'
   password: ''
+  # Redis 走哪张网卡：留空跟随 system.dev；
+  # 填 off / none / - 表示不绑定（Redis 在局域网时建议填 off）
+  dev: 'off'
 
 cache:
   type: memory    # memory、redis
@@ -297,6 +318,9 @@ mysql:
   max-open-conns: 100
   log-mode: 'error'
   log-zap: false
+  # MySQL 走哪张网卡：留空跟随 system.dev；
+  # 填 off / none / - 表示不绑定（MySQL 在局域网时建议填 off）
+  dev: 'off'
 
 # zap logger configuration
 zap:

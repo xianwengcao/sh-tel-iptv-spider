@@ -9,7 +9,9 @@ require (
 	github.com/astaxie/beego v1.12.3
 	github.com/fsnotify/fsnotify v1.6.0
 	github.com/go-resty/resty/v2 v2.7.0
+	github.com/go-sql-driver/mysql v1.7.0
 	github.com/golang-module/carbon v1.7.3
+	github.com/gomodule/redigo v2.0.0+incompatible
 	github.com/kataras/iris/v12 v12.1.8
 	github.com/lestrrat-go/file-rotatelogs v2.4.0+incompatible
 	github.com/minio/minio-go/v7 v7.0.93
@@ -19,6 +21,7 @@ require (
 	github.com/tencentyun/cos-go-sdk-v5 v0.7.41
 	go.uber.org/zap v1.24.0
 	golang.org/x/sync v0.12.0
+	golang.org/x/sys v0.31.0
 	gorm.io/driver/mysql v1.4.7
 	gorm.io/gorm v1.24.6
 )
@@ -36,12 +39,10 @@ require (
 	github.com/eknkc/amber v0.0.0-20171010120322-cdade1c07385 // indirect
 	github.com/fatih/structs v1.1.0 // indirect
 	github.com/go-ini/ini v1.67.0 // indirect
-	github.com/go-sql-driver/mysql v1.7.0 // indirect
 	github.com/gobuffalo/envy v1.7.0 // indirect
 	github.com/gobuffalo/packd v0.3.0 // indirect
 	github.com/gobuffalo/packr v1.30.1 // indirect
 	github.com/goccy/go-json v0.10.5 // indirect
-	github.com/gomodule/redigo v2.0.0+incompatible // indirect
 	github.com/google/go-querystring v1.1.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/hashicorp/hcl v1.0.0 // indirect
@@ -94,7 +95,6 @@ require (
 	go.uber.org/multierr v1.8.0 // indirect
 	golang.org/x/crypto v0.36.0 // indirect
 	golang.org/x/net v0.38.0 // indirect
-	golang.org/x/sys v0.31.0 // indirect
 	golang.org/x/text v0.23.0 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
 	gopkg.in/sourcemap.v1 v1.0.5 // indirect
